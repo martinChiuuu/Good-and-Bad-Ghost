@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>好鬼難尋 - 雙機連線對戰</title>
+  <title>好鬼難尋 - 雙機連線對戰 (RWD響應式版)</title>
   <!-- 引入免費開源的 WebRTC P2P 連線庫 PeerJS -->
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <style>
@@ -38,24 +38,34 @@
       align-items: center;
       min-height: 100vh;
       padding: 12px;
+      justify-content: flex-start;
     }
 
     h1 {
-      font-size: 1.4rem;
+      font-size: clamp(1.2rem, 3vw, 1.8rem);
       margin: 6px 0 12px 0;
       color: #7dcfff;
       text-shadow: 0 0 10px rgba(125, 207, 255, 0.3);
       text-align: center;
     }
 
+    /* 主遊戲響應式容器 */
+    .app-layout {
+      width: 100%;
+      max-width: 900px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
     /* 連線與暱稱面板 */
     .lobby-panel {
       background: var(--card-bg);
-      padding: 16px;
+      padding: 18px;
       border-radius: 12px;
-      margin-bottom: 12px;
       width: 100%;
-      max-width: 360px;
+      max-width: 420px;
       display: flex;
       flex-direction: column;
       gap: 12px;
@@ -65,22 +75,22 @@
     .form-group {
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: 6px;
     }
 
     label {
-      font-size: 0.85rem;
+      font-size: 0.9rem;
       color: #a9b1d6;
     }
 
     input[type="text"] {
       width: 100%;
-      padding: 10px 12px;
+      padding: 10px 14px;
       border-radius: 8px;
       border: 1px solid #414868;
       background: #16161e;
       color: #fff;
-      font-size: 0.95rem;
+      font-size: 1rem;
       outline: none;
     }
     input[type="text"]:focus {
@@ -100,17 +110,48 @@
       gap: 8px;
     }
 
+    /* 遊戲進行中：桌機版左右分欄，手機版上下排列 */
+    .game-zone {
+      display: none;
+      width: 100%;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    @media (min-width: 768px) {
+      .game-zone {
+        flex-direction: row;
+        justify-content: center;
+        align-items: flex-start;
+        gap: 24px;
+      }
+      .side-info-panel {
+        width: 280px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+    }
+
+    .side-info-panel {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
     /* 狀態提示 */
     .status-panel {
       background: var(--card-bg);
-      padding: 10px 16px;
+      padding: 12px 16px;
       border-radius: 10px;
-      margin-bottom: 8px;
       text-align: center;
-      font-size: 0.95rem;
+      font-size: clamp(0.9rem, 2vw, 1rem);
       width: 100%;
-      max-width: 360px;
       border-left: 4px solid var(--accent-blue);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     }
 
     .player-highlight {
@@ -121,14 +162,13 @@
     /* 幽靈配置即時統計標籤 (布陣防呆提示) */
     .setup-counter-bar {
       width: 100%;
-      max-width: 360px;
       background: var(--card-bg);
-      padding: 8px 12px;
+      padding: 10px 14px;
       border-radius: 8px;
-      font-size: 0.85rem;
+      font-size: 0.9rem;
       display: flex;
       justify-content: space-around;
-      margin-bottom: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     }
     .count-tag {
       font-weight: bold;
@@ -139,39 +179,56 @@
     /* 戰況統計 */
     .score-bar {
       display: flex;
-      justify-content: space-between;
+      flex-direction: column;
+      gap: 8px;
       width: 100%;
-      max-width: 360px;
-      font-size: 0.85rem;
-      margin-bottom: 8px;
+      font-size: 0.9rem;
       background: var(--card-bg);
-      padding: 8px 12px;
+      padding: 12px 16px;
       border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     }
 
-    /* 棋盤主體 (自適應手機螢幕) */
+    .score-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* 棋盤主體 (自適應手機與桌面螢幕尺寸) */
+    .board-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      max-width: min(90vw, 460px);
+    }
+
     .board {
       display: grid;
       grid-template-columns: repeat(6, 1fr);
       grid-template-rows: repeat(6, 1fr);
-      gap: 4px;
+      gap: clamp(3px, 1vw, 6px);
       background: var(--board-bg);
-      padding: 6px;
-      border-radius: 10px;
+      padding: clamp(6px, 1.5vw, 10px);
+      border-radius: 12px;
       width: 100%;
-      max-width: 360px;
       aspect-ratio: 1 / 1;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.5);
     }
 
     .cell {
       background: var(--cell-bg);
-      border-radius: 6px;
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
       position: relative;
       cursor: pointer;
+      transition: background 0.15s;
+    }
+    .cell:hover {
+      background: var(--cell-hover);
     }
 
     /* 對手底線兩端的逃生出口 (螢幕頂部的左右兩角) */
@@ -182,20 +239,20 @@
       content: '▲ 出口';
       position: absolute;
       top: 2px;
-      font-size: 8px;
+      font-size: clamp(8px, 1.2vw, 10px);
       color: var(--exit-color);
     }
 
     .cell.selected {
-      outline: 2px solid var(--selected);
-      box-shadow: 0 0 8px var(--selected);
+      outline: 3px solid var(--selected);
+      box-shadow: 0 0 10px var(--selected);
     }
 
     /* 可移動提示點 */
     .cell.valid-move::before {
       content: '';
-      width: 12px;
-      height: 12px;
+      width: clamp(10px, 2.2vw, 16px);
+      height: clamp(10px, 2.2vw, 16px);
       background: var(--selected);
       border-radius: 50%;
       opacity: 0.8;
@@ -209,7 +266,7 @@
       content: '🚪 點此逃離!';
       position: absolute;
       bottom: 2px;
-      font-size: 8px;
+      font-size: clamp(8px, 1.2vw, 10px);
       color: #7dcfff;
       font-weight: bold;
     }
@@ -219,27 +276,31 @@
       to { box-shadow: inset 0 0 16px var(--accent-blue); }
     }
 
-    /* 幽靈棋子樣式 */
+    /* 幽靈棋子樣式 (字體與標記響應式縮放) */
     .ghost {
-      width: 80%;
-      height: 80%;
+      width: 82%;
+      height: 82%;
       border-radius: 50% 50% 25% 25%;
       background: #cfc9c2;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 20px;
+      font-size: clamp(20px, 4.5vw, 32px);
       position: relative;
-      box-shadow: 0 3px 6px rgba(0,0,0,0.4);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+      transition: transform 0.15s;
+    }
+    .ghost:hover {
+      transform: scale(1.05);
     }
 
     .badge {
-      width: 12px;
-      height: 12px;
+      width: clamp(10px, 2.2vw, 16px);
+      height: clamp(10px, 2.2vw, 16px);
       border-radius: 50%;
       border: 2px solid white;
       position: absolute;
-      bottom: 4px;
+      bottom: clamp(3px, 0.8vw, 6px);
     }
     .badge.good { background-color: var(--accent-blue); }
     .badge.bad { background-color: var(--accent-red); }
@@ -250,13 +311,14 @@
       background: var(--accent-blue);
       color: #1a1b26;
       border: none;
-      padding: 10px 14px;
+      padding: 10px 16px;
       border-radius: 8px;
       font-weight: bold;
       cursor: pointer;
-      font-size: 0.9rem;
+      font-size: 0.95rem;
       transition: 0.2s;
     }
+    button:hover { filter: brightness(1.1); }
     button:active { transform: scale(0.97); }
     button:disabled {
       background: #414868;
@@ -269,7 +331,6 @@
     .bottom-controls {
       margin-top: 10px;
       width: 100%;
-      max-width: 360px;
       display: flex;
       gap: 10px;
       justify-content: center;
@@ -292,7 +353,7 @@
       padding: 24px;
       border-radius: 14px;
       text-align: center;
-      max-width: 320px;
+      max-width: 360px;
       width: 100%;
       box-shadow: 0 10px 25px rgba(0,0,0,0.6);
     }
@@ -308,51 +369,67 @@
 
   <h1>👻 好鬼難尋 (雙機連線版)</h1>
 
-  <!-- 大廳與暱稱輸入面板 -->
-  <div class="lobby-panel" id="lobby-panel">
-    <div class="form-group">
-      <label for="player-name-input">👤 你的遊戲暱稱：</label>
-      <input type="text" id="player-name-input" placeholder="請輸入暱稱 (例如: 幽靈獵人)" maxlength="10">
+  <div class="app-layout">
+    <!-- 大廳與暱稱輸入面板 -->
+    <div class="lobby-panel" id="lobby-panel">
+      <div class="form-group">
+        <label for="player-name-input">👤 你的遊戲暱稱：</label>
+        <input type="text" id="player-name-input" placeholder="請輸入暱稱 (例如: 幽靈獵人)" maxlength="10">
+      </div>
+
+      <div class="room-actions">
+        <button onclick="createRoom()">建立房間 (成為房主 P1)</button>
+        <div class="join-group">
+          <input type="text" id="join-room-id" placeholder="輸入 5 碼房間代碼">
+          <button class="secondary" onclick="joinRoom()">加入</button>
+        </div>
+      </div>
+      <div id="room-status" style="font-size: 0.85rem; color: #e0af68; text-align: center; min-height: 18px;"></div>
     </div>
 
-    <div class="room-actions">
-      <button onclick="createRoom()">建立房間 (成為房主 P1)</button>
-      <div class="join-group">
-        <input type="text" id="join-room-id" placeholder="輸入 5 碼房間代碼">
-        <button class="secondary" onclick="joinRoom()">加入</button>
+    <!-- 遊戲進行主區域 (RWD 自適應佈局) -->
+    <div class="game-zone" id="game-zone">
+      <!-- 資訊側欄 (電腦版在左/右，手機版在上方) -->
+      <div class="side-info-panel">
+        <!-- 狀態提示 -->
+        <div class="status-panel" id="status-panel">
+          <div id="game-message">等待對手連線...</div>
+        </div>
+
+        <!-- 布陣階段幽靈數量檢查器 -->
+        <div class="setup-counter-bar" id="setup-counter-bar">
+          <div>好鬼 🟦：<span id="setup-good-count" class="count-tag">0 / 4</span></div>
+          <div>壞鬼 🟥：<span id="setup-bad-count" class="count-tag">0 / 4</span></div>
+        </div>
+
+        <!-- 戰況統計面板 -->
+        <div class="score-bar" id="score-bar">
+          <div class="score-item">
+            <span><b id="my-name-display">己方</b> 吃掉：</span>
+            <span>🟦 <b id="my-good">0</b>/4 &nbsp;|&nbsp; 🟥 <b id="my-bad">0</b>/4</span>
+          </div>
+          <div class="score-item">
+            <span><b id="opp-name-display">敵方</b> 吃掉：</span>
+            <span>🟦 <b id="opp-good">0</b>/4 &nbsp;|&nbsp; 🟥 <b id="opp-bad">0</b>/4</span>
+          </div>
+        </div>
+
+        <!-- 布陣完成按鈕 (桌面/側欄模式) -->
+        <div class="bottom-controls" id="bottom-controls">
+          <button id="ready-btn" style="width: 100%;" onclick="finishSetup()">完成布陣並準備</button>
+        </div>
+
+        <!-- 逃跑確認按鈕區 -->
+        <div class="bottom-controls" id="escape-controls" style="display: none;">
+          <button style="background: #bb9af7; color: #1a1b26; width: 100%;" onclick="executeEscape()">🚪 移出棋盤（好鬼逃脫獲勝！）</button>
+        </div>
+      </div>
+
+      <!-- 棋盤主體區 -->
+      <div class="board-container">
+        <div class="board" id="board"></div>
       </div>
     </div>
-    <div id="room-status" style="font-size: 0.82rem; color: #e0af68; text-align: center; min-height: 18px;"></div>
-  </div>
-
-  <!-- 布陣階段幽靈數量檢查器 (防呆 1) -->
-  <div class="setup-counter-bar" id="setup-counter-bar" style="display: none;">
-    <div>好鬼 🟦：<span id="setup-good-count" class="count-tag">0 / 4</span></div>
-    <div>壞鬼 🟥：<span id="setup-bad-count" class="count-tag">0 / 4</span></div>
-  </div>
-
-  <!-- 狀態提示 -->
-  <div class="status-panel" id="status-panel" style="display: none;">
-    <div id="game-message">等待對手連線...</div>
-  </div>
-
-  <!-- 戰況統計 -->
-  <div class="score-bar" id="score-bar" style="display: none;">
-    <div><span id="my-name-display">己方</span> 吃掉：🟦 <span id="my-good">0</span>/4 | 🟥 <span id="my-bad">0</span>/4</div>
-    <div><span id="opp-name-display">敵方</span> 吃掉：🟦 <span id="opp-good">0</span>/4 | 🟥 <span id="opp-bad">0</span>/4</div>
-  </div>
-
-  <!-- 棋盤主體 -->
-  <div class="board" id="board" style="display: none;"></div>
-
-  <!-- 布陣完成 / 逃脫操作按鈕 -->
-  <div class="bottom-controls" id="bottom-controls" style="display: none;">
-    <button id="ready-btn" onclick="finishSetup()">完成布陣並準備</button>
-  </div>
-
-  <!-- 逃跑確認按鈕區 (當選取到位於出口格的好鬼時顯示) -->
-  <div class="bottom-controls" id="escape-controls" style="display: none;">
-    <button style="background: #bb9af7; color: #1a1b26; width: 100%;" onclick="executeEscape()">🚪 移出棋盤（好鬼逃脫獲勝！）</button>
   </div>
 
   <!-- 吃子確認防呆彈窗 -->
@@ -371,7 +448,7 @@
     </div>
   </div>
 
-  <!-- 吃子結果揭曉彈窗 (問題 2: 揭曉好鬼還是壞鬼) -->
+  <!-- 吃子結果揭曉彈窗 -->
   <div class="modal hidden" id="capture-result-modal">
     <div class="modal-card">
       <h3 id="result-title" style="margin-bottom: 10px;">👻 揭曉幽靈真面目！</h3>
@@ -460,13 +537,13 @@
       });
     }
 
-    // 加入房間 (Player 2) - 修復問題 1：確保在加入前即記錄並鎖定玩家2暱稱
+    // 加入房間 (Player 2)
     function joinRoom() {
       const hostId = document.getElementById('join-room-id').value.trim().toUpperCase();
       if (!hostId) return showAlert('提示', '請輸入對方的 5 碼房間代碼！');
 
       const name = getEnteredName("挑戰者");
-      playerNames[2] = name; // 即時更新玩家2本地變數
+      playerNames[2] = name;
 
       peer = new Peer();
       peer.on('open', () => {
@@ -484,11 +561,7 @@
     function setupDataConnection() {
       conn.on('open', () => {
         document.getElementById('lobby-panel').style.display = 'none';
-        document.getElementById('status-panel').style.display = 'block';
-        document.getElementById('setup-counter-bar').style.display = 'flex';
-        document.getElementById('score-bar').style.display = 'flex';
-        document.getElementById('board').style.display = 'grid';
-        document.getElementById('bottom-controls').style.display = 'flex';
+        document.getElementById('game-zone').style.display = 'flex';
 
         gameState = 'SETUP';
         initSetupPieces();
@@ -598,7 +671,6 @@
         captured = data.captured;
         gameState = data.gameState;
         if (data.playerNames) {
-          // 修復問題 1：合併暱稱，不覆蓋己方已輸入的暱稱
           if (data.playerNames[1] && myPlayer !== 1) playerNames[1] = data.playerNames[1];
           if (data.playerNames[2] && myPlayer !== 2) playerNames[2] = data.playerNames[2];
         }
@@ -613,7 +685,6 @@
         turn = data.turn;
         render();
 
-        // 問題 2：如果對手吃了我的棋子，也通知我被吃的是什麼鬼
         if (data.capturedInfo) {
           const isGood = data.capturedInfo.type === 'good';
           showCaptureResultModal(
@@ -646,7 +717,7 @@
       return { globalR: r, globalC: c };
     }
 
-    // 判斷某個全域位置是否為當前玩家的逃生出口格 (敵方的底線兩角)
+    // 判斷是否在對手出口格
     function isAtOpponentExit(r, c, player) {
       if (player === 1) return (r === 0 && (c === 0 || c === 5));
       if (player === 2) return (r === 5 && (c === 0 || c === 5));
@@ -669,16 +740,13 @@
           const cellEl = document.createElement('div');
           cellEl.className = 'cell';
 
-          // 頂部左右兩角為逃生出口門
           if (r === 0 && (c === 0 || c === 5)) {
             cellEl.classList.add('exit-zone');
           }
 
-          // 選取高亮與合法步
           if (selectedPos && selectedPos.r === globalR && selectedPos.c === globalC) {
             cellEl.classList.add('selected');
 
-            // 問題 3：如果選中的是位於對手出口格的好鬼，高亮提示可逃脫
             if (ghost && ghost.player === myPlayer && ghost.type === 'good' && isAtOpponentExit(globalR, globalC, myPlayer)) {
               cellEl.classList.add('can-escape');
               canEscapeNow = true;
@@ -688,7 +756,6 @@
             cellEl.classList.add('valid-move');
           }
 
-          // 幽靈棋子
           if (ghost) {
             const ghostEl = document.createElement('div');
             ghostEl.className = 'ghost';
@@ -697,7 +764,6 @@
             const badge = document.createElement('div');
             badge.className = 'badge';
 
-            // 只有自己棋子能看到善惡顏色
             if (ghost.player === myPlayer) {
               badge.classList.add(ghost.type);
             } else {
@@ -713,7 +779,6 @@
         }
       }
 
-      // 控制逃脫按鈕顯示
       const escapeCtrl = document.getElementById('escape-controls');
       if (canEscapeNow && gameState === 'PLAYING' && turn === myPlayer) {
         escapeCtrl.style.display = 'flex';
@@ -740,7 +805,6 @@
       oppGood.innerText = captured[opponent].good;
       oppBad.innerText = captured[opponent].bad;
 
-      // 更新布陣數量提示
       if (gameState === 'SETUP') {
         const counts = getMyGhostCounts();
         const gEl = document.getElementById('setup-good-count');
@@ -763,7 +827,6 @@
     // 點擊棋格事件
     function handleCellClick(r, c) {
       if (gameState === 'SETUP') {
-        // 布陣階段：點選切換好/壞
         const ghost = board[r][c];
         if (ghost && ghost.player === myPlayer) {
           ghost.type = ghost.type === 'good' ? 'bad' : 'good';
@@ -777,7 +840,6 @@
 
       const clickedGhost = board[r][c];
 
-      // 選取己方棋子
       if (clickedGhost && clickedGhost.player === myPlayer) {
         selectedPos = { r, c };
         calculateValidMoves(r, c);
@@ -785,19 +847,16 @@
         return;
       }
 
-      // 點擊可行目標
       const move = validMoves.find(m => m.r === r && m.c === c);
       if (selectedPos && move) {
         const targetGhost = board[r][c];
 
-        // 若目的地方格有對手棋子，跳出吃子二度確認
         if (targetGhost && targetGhost.player !== myPlayer) {
           pendingMove = { from: selectedPos, to: move };
           document.getElementById('capture-confirm-modal').classList.remove('hidden');
           return;
         }
 
-        // 一般移動
         executeMove(selectedPos, move);
       } else {
         selectedPos = null;
@@ -806,7 +865,6 @@
       }
     }
 
-    // 確認吃棋
     function confirmCapture() {
       document.getElementById('capture-confirm-modal').classList.add('hidden');
       if (pendingMove) {
@@ -815,7 +873,6 @@
       }
     }
 
-    // 取消吃棋
     function cancelCapture() {
       document.getElementById('capture-confirm-modal').classList.add('hidden');
       pendingMove = null;
@@ -824,7 +881,6 @@
       render();
     }
 
-    // 計算合法正交移動
     function calculateValidMoves(r, c) {
       validMoves = [];
       const deltas = [[-1, 0], [1, 0], [0, -1], [0, 1]];
@@ -842,7 +898,6 @@
       }
     }
 
-    // 問題 3：執行好鬼逃脫
     function executeEscape() {
       if (!selectedPos || gameState !== 'PLAYING' || turn !== myPlayer) return;
       const ghost = board[selectedPos.r][selectedPos.c];
@@ -854,7 +909,6 @@
       }
     }
 
-    // 執行走棋與勝負判斷
     function executeMove(from, to) {
       const movingGhost = board[from.r][from.c];
       const target = board[to.r][to.c];
@@ -867,7 +921,6 @@
           byPlayer: myPlayer
         };
 
-        // 問題 2：主動吃棋的玩家彈出結果視窗
         const isGood = target.type === 'good';
         showCaptureResultModal(
           '👻 吃棋揭曉！',
@@ -875,7 +928,6 @@
           isGood ? `太棒了！你吃到了對手的 <b style="color: var(--accent-blue);">好鬼 (藍)</b>！` : `糟糕！你吃到了對手的 <b style="color: var(--accent-red);">壞鬼 (紅)</b>！`
         );
 
-        // 勝利條件 1：吃光對手 4 隻好鬼
         if (captured[myPlayer].good === 4) {
           board[to.r][to.c] = movingGhost;
           board[from.r][from.c] = null;
@@ -885,7 +937,6 @@
           return;
         }
 
-        // 勝利條件 2：誤吃 4 隻壞鬼 (對手勝)
         if (captured[myPlayer].bad === 4) {
           board[to.r][to.c] = movingGhost;
           board[from.r][from.c] = null;
@@ -914,7 +965,6 @@
       });
     }
 
-    // 問題 2：顯示吃子結果揭曉彈窗
     function showCaptureResultModal(title, badge, desc) {
       document.getElementById('result-title').innerText = title;
       document.getElementById('result-badge').innerText = badge;
@@ -926,7 +976,6 @@
       document.getElementById('capture-result-modal').classList.add('hidden');
     }
 
-    // 一般彈窗
     function showAlert(title, desc) {
       document.getElementById('alert-title').innerHTML = title;
       document.getElementById('alert-desc').innerHTML = desc;
@@ -937,7 +986,6 @@
       document.getElementById('alert-modal').classList.add('hidden');
     }
 
-    // 遊戲結束結算
     function showGameOver(winner, reason) {
       gameState = 'ENDED';
       const isWinner = (winner === myPlayer);
