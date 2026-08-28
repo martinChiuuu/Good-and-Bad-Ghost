@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>好鬼難尋 - 雙機連線對戰</title>
+  <!-- 引入免費開源的 WebRTC P2P 連線庫 PeerJS -->
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <style>
+    :root {
+      --bg-color: #1a1b26;
+      --card-bg: #24283b;
+      --text-color: #c0caf5;
+      --accent-blue: #7aa2f7;
+      --accent-red: #f7768e;
+      --board-bg: #16161e;
+      --cell-bg: #2f354a;
+      --cell-hover: #414868;
+      --selected: #e0af68;
+      --exit-color: #bb9af7;
+      --btn-green: #9ece6a;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      margin: 0;
+      padding: 0;
+      touch-action: manipulation;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 12px;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      margin: 6px 0 12px 0;
+      color: #7dcfff;
+      text-shadow: 0 0 10px rgba(125, 207, 255, 0.3);
+      text-align: center;
+    }
+
+    /* 連線與暱稱面板 */
+    .lobby-panel {
+      background: var(--card-bg);
+      padding: 16px;
+      border-radius: 12px;
+      margin-bottom: 12px;
+      width: 100%;
+      max-width: 360px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    label {
+      font-size: 0.85rem;
+      color: #a9b1d6;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #414868;
+      background: #16161e;
+      color: #fff;
+      font-size: 0.95rem;
+      outline: none;
+    }
+    input[type="text"]:focus {
+      border-color: var(--accent-blue);
+    }
+
+    .room-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      border-top: 1px solid #3b4261;
+      padding-top: 12px;
+    }
+
+    .join-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* 狀態提示 */
+    .status-panel {
+      background: var(--card-bg);
+      padding: 10px 16px;
+      border-radius: 10px;
+      margin-bottom: 8px;
+      text-align: center;
+      font-size: 0.95rem;
+      width: 100%;
+      max-width: 360px;
+      border-left: 4px solid var(--accent-blue);
+    }
+
+    .player-highlight {
+      font-weight: bold;
+      color: var(--selected);
+    }
+
+    /* 幽靈配置即時統計標籤 (布陣防呆提示) */
+    .setup-counter-bar {
+      width: 100%;
+      max-width: 360px;
+      background: var(--card-bg);
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 8px;
+    }
+    .count-tag {
+      font-weight: bold;
+    }
+    .count-tag.valid { color: #9ece6a; }
+    .count-tag.invalid { color: #f7768e; }
+
+    /* 戰況統計 */
+    .score-bar {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 360px;
+      font-size: 0.85rem;
+      margin-bottom: 8px;
+      background: var(--card-bg);
+      padding: 8px 12px;
+      border-radius: 8px;
+    }
+
+    /* 棋盤主體 (自適應手機螢幕) */
+    .board {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      grid-template-rows: repeat(6, 1fr);
+      gap: 4px;
+      background: var(--board-bg);
+      padding: 6px;
+      border-radius: 10px;
+      width: 100%;
+      max-width: 360px;
+      aspect-ratio: 1 / 1;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+    }
+
+    .cell {
+      background: var(--cell-bg);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      cursor: pointer;
+    }
+
+    /* 對手底線兩端的逃生出口 (螢幕頂部的左右兩角) */
+    .cell.exit-zone {
+      border-top: 3px solid var(--exit-color);
+    }
+    .cell.exit-zone::after {
+      content: '▲ 出口';
+      position: absolute;
+      top: 2px;
+      font-size: 8px;
+      color: var(--exit-color);
+    }
+
+    .cell.selected {
+      outline: 2px solid var(--selected);
+      box-shadow: 0 0 8px var(--selected);
+    }
+
+    /* 可移動提示點 */
+    .cell.valid-move::before {
+      content: '';
+      width: 12px;
+      height: 12px;
+      background: var(--selected);
+      border-radius: 50%;
+      opacity: 0.8;
+    }
+
+    /* 可逃脫提示（好鬼在出口格時） */
+    .cell.can-escape {
+      animation: pulse-exit 1.2s infinite alternate;
+    }
+    .cell.can-escape::after {
+      content: '🚪 點此逃離!';
+      position: absolute;
+      bottom: 2px;
+      font-size: 8px;
+      color: #7dcfff;
+      font-weight: bold;
+    }
+
+    @keyframes pulse-exit {
+      from { box-shadow: inset 0 0 6px var(--accent-blue); }
+      to { box-shadow: inset 0 0 16px var(--accent-blue); }
+    }
+
+    /* 幽靈棋子樣式 */
+    .ghost {
+      width: 80%;
+      height: 80%;
+      border-radius: 50% 50% 25% 25%;
+      background: #cfc9c2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      position: relative;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.4);
+    }
+
+    .badge {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid white;
+      position: absolute;
+      bottom: 4px;
+    }
+    .badge.good { background-color: var(--accent-blue); }
+    .badge.bad { background-color: var(--accent-red); }
+    .badge.unknown { display: none; }
+
+    /* 按鈕樣式 */
+    button {
+      background: var(--accent-blue);
+      color: #1a1b26;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: 0.2s;
+    }
+    button:active { transform: scale(0.97); }
+    button:disabled {
+      background: #414868;
+      color: #7a819e;
+      cursor: not-allowed;
+    }
+    button.secondary { background: #414868; color: var(--text-color); }
+    button.danger { background: var(--accent-red); color: #fff; }
+
+    .bottom-controls {
+      margin-top: 10px;
+      width: 100%;
+      max-width: 360px;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    /* 彈窗 / Modal */
+    .modal {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(10, 10, 15, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 100;
+    }
+    .modal.hidden { display: none; }
+    .modal-card {
+      background: var(--card-bg);
+      padding: 24px;
+      border-radius: 14px;
+      text-align: center;
+      max-width: 320px;
+      width: 100%;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+    }
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>👻 好鬼難尋 (雙機連線版)</h1>
+
+  <!-- 大廳與暱稱輸入面板 -->
+  <div class="lobby-panel" id="lobby-panel">
+    <div class="form-group">
+      <label for="player-name-input">👤 你的遊戲暱稱：</label>
+      <input type="text" id="player-name-input" placeholder="請輸入暱稱 (例如: 幽靈獵人)" maxlength="10">
+    </div>
+
+    <div class="room-actions">
+      <button onclick="createRoom()">建立房間 (成為房主 P1)</button>
+      <div class="join-group">
+        <input type="text" id="join-room-id" placeholder="輸入 5 碼房間代碼">
+        <button class="secondary" onclick="joinRoom()">加入</button>
+      </div>
+    </div>
+    <div id="room-status" style="font-size: 0.82rem; color: #e0af68; text-align: center; min-height: 18px;"></div>
+  </div>
+
+  <!-- 布陣階段幽靈數量檢查器 (防呆 1) -->
+  <div class="setup-counter-bar" id="setup-counter-bar" style="display: none;">
+    <div>好鬼 🟦：<span id="setup-good-count" class="count-tag">0 / 4</span></div>
+    <div>壞鬼 🟥：<span id="setup-bad-count" class="count-tag">0 / 4</span></div>
+  </div>
+
+  <!-- 狀態提示 -->
+  <div class="status-panel" id="status-panel" style="display: none;">
+    <div id="game-message">等待對手連線...</div>
+  </div>
+
+  <!-- 戰況統計 -->
+  <div class="score-bar" id="score-bar" style="display: none;">
+    <div><span id="my-name-display">己方</span> 吃掉：🟦 <span id="my-good">0</span>/4 | 🟥 <span id="my-bad">0</span>/4</div>
+    <div><span id="opp-name-display">敵方</span> 吃掉：🟦 <span id="opp-good">0</span>/4 | 🟥 <span id="opp-bad">0</span>/4</div>
+  </div>
+
+  <!-- 棋盤主體 -->
+  <div class="board" id="board" style="display: none;"></div>
+
+  <!-- 布陣完成 / 逃脫操作按鈕 -->
+  <div class="bottom-controls" id="bottom-controls" style="display: none;">
+    <button id="ready-btn" onclick="finishSetup()">完成布陣並準備</button>
+  </div>
+
+  <!-- 逃跑確認按鈕區 (當選取到位於出口格的好鬼時顯示) -->
+  <div class="bottom-controls" id="escape-controls" style="display: none;">
+    <button style="background: #bb9af7; color: #1a1b26; width: 100%;" onclick="executeEscape()">🚪 移出棋盤（好鬼逃脫獲勝！）</button>
+  </div>
+
+  <!-- 吃子確認防呆彈窗 -->
+  <div class="modal hidden" id="capture-confirm-modal">
+    <div class="modal-card">
+      <h3 style="color: var(--accent-red); margin-bottom: 10px;">⚠️ 吃棋確認</h3>
+      <p style="font-size: 0.95rem; line-height: 1.5; color: #c0caf5;">
+        你即將吃掉對手的這隻幽靈。<br>
+        如果是好鬼你將累積戰果，但若是壞鬼將可能導致敗北！<br><br>
+        <b>確定要執行吃棋嗎？</b>
+      </p>
+      <div class="modal-actions">
+        <button class="secondary" onclick="cancelCapture()">取消</button>
+        <button class="danger" onclick="confirmCapture()">確認吃棋</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 吃子結果揭曉彈窗 (問題 2: 揭曉好鬼還是壞鬼) -->
+  <div class="modal hidden" id="capture-result-modal">
+    <div class="modal-card">
+      <h3 id="result-title" style="margin-bottom: 10px;">👻 揭曉幽靈真面目！</h3>
+      <div id="result-badge" style="font-size: 3rem; margin: 10px 0;"></div>
+      <p id="result-desc" style="font-size: 0.95rem; line-height: 1.5; margin-bottom: 16px;"></p>
+      <button onclick="closeCaptureResultModal()">確定</button>
+    </div>
+  </div>
+
+  <!-- 一般警告提示彈窗 -->
+  <div class="modal hidden" id="alert-modal">
+    <div class="modal-card">
+      <h3 id="alert-title" style="color: #e0af68; margin-bottom: 10px;">提示</h3>
+      <p id="alert-desc" style="font-size: 0.9rem; line-height: 1.5; margin-bottom: 16px;"></p>
+      <button onclick="closeAlertModal()">了解</button>
+    </div>
+  </div>
+
+  <!-- 遊戲結束結算彈窗 -->
+  <div class="modal hidden" id="gameover-modal">
+    <div class="modal-card">
+      <h2 id="modal-title" style="color: #7aa2f7; margin-bottom: 12px;">🏆 獲勝！</h2>
+      <p id="modal-desc" style="font-size: 0.95rem; margin-bottom: 16px; line-height: 1.5;"></p>
+      <button onclick="location.reload()">再玩一局</button>
+    </div>
+  </div>
+
+  <script>
+    const ROWS = 6;
+    const COLS = 6;
+
+    let peer = null;
+    let conn = null;
+    let myPlayer = null; // 1 或 2
+    let turn = 1;        // 目前行動玩家 (1 或 2)
+    let gameState = 'LOBBY'; // LOBBY, SETUP, PLAYING, ENDED
+
+    // 玩家暱稱自訂
+    let playerNames = {
+      1: "玩家 1",
+      2: "玩家 2"
+    };
+
+    // 棋盤邏輯 (Player 1 初始在下方 rows 4,5；Player 2 初始在上方 rows 0,1)
+    let board = Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
+    let selectedPos = null;
+    let validMoves = [];
+    let pendingMove = null; // 暫存等待確認的吃棋動作
+
+    let p1Ready = false;
+    let p2Ready = false;
+
+    // 戰利品統計
+    let captured = {
+      1: { good: 0, bad: 0 },
+      2: { good: 0, bad: 0 }
+    };
+
+    // 取得輸入之暱稱
+    function getEnteredName(defaultName) {
+      const val = document.getElementById('player-name-input').value.trim();
+      return val || defaultName;
+    }
+
+    // 建立房間 (Player 1)
+    function createRoom() {
+      const name = getEnteredName("房主");
+      playerNames[1] = name;
+
+      const randomId = Math.random().toString(36).substring(2, 7).toUpperCase();
+      peer = new Peer(randomId);
+
+      peer.on('open', (id) => {
+        myPlayer = 1;
+        document.getElementById('room-status').innerHTML = `房間代碼：<b>${id}</b> (已複製代碼，請分享給好友)`;
+        navigator.clipboard?.writeText(id);
+      });
+
+      peer.on('connection', (c) => {
+        conn = c;
+        setupDataConnection();
+      });
+
+      peer.on('error', (err) => {
+        showAlert('連線錯誤', '建立房間失敗，請刷新重試。');
+      });
+    }
+
+    // 加入房間 (Player 2) - 修復問題 1：確保在加入前即記錄並鎖定玩家2暱稱
+    function joinRoom() {
+      const hostId = document.getElementById('join-room-id').value.trim().toUpperCase();
+      if (!hostId) return showAlert('提示', '請輸入對方的 5 碼房間代碼！');
+
+      const name = getEnteredName("挑戰者");
+      playerNames[2] = name; // 即時更新玩家2本地變數
+
+      peer = new Peer();
+      peer.on('open', () => {
+        myPlayer = 2;
+        conn = peer.connect(hostId);
+        setupDataConnection();
+      });
+
+      peer.on('error', (err) => {
+        showAlert('連線錯誤', '無法連接至該房間，請確認代碼無誤。');
+      });
+    }
+
+    // 設定 P2P 數據傳輸
+    function setupDataConnection() {
+      conn.on('open', () => {
+        document.getElementById('lobby-panel').style.display = 'none';
+        document.getElementById('status-panel').style.display = 'block';
+        document.getElementById('setup-counter-bar').style.display = 'flex';
+        document.getElementById('score-bar').style.display = 'flex';
+        document.getElementById('board').style.display = 'grid';
+        document.getElementById('bottom-controls').style.display = 'flex';
+
+        gameState = 'SETUP';
+        initSetupPieces();
+
+        // 雙方互換暱稱
+        conn.send({
+          type: 'EXCHANGE_NAME',
+          player: myPlayer,
+          name: playerNames[myPlayer]
+        });
+
+        if (myPlayer === 1) {
+          sendSync();
+        }
+        render();
+      });
+
+      conn.on('data', (data) => {
+        handleIncomingData(data);
+      });
+    }
+
+    // 初始化 4 好 4 壞隨機配置
+    function initSetupPieces() {
+      const makeShuffled = () => {
+        const arr = ['good','good','good','good','bad','bad','bad','bad'];
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      };
+
+      const p2Types = makeShuffled();
+      let idx2 = 0;
+      for (let r of [0, 1]) {
+        for (let c of [1, 2, 3, 4]) {
+          board[r][c] = { player: 2, type: p2Types[idx2++] };
+        }
+      }
+
+      const p1Types = makeShuffled();
+      let idx1 = 0;
+      for (let r of [4, 5]) {
+        for (let c of [1, 2, 3, 4]) {
+          board[r][c] = { player: 1, type: p1Types[idx1++] };
+        }
+      }
+    }
+
+    // 計算己方幽靈好壞數量
+    function getMyGhostCounts() {
+      let good = 0;
+      let bad = 0;
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const ghost = board[r][c];
+          if (ghost && ghost.player === myPlayer) {
+            if (ghost.type === 'good') good++;
+            if (ghost.type === 'bad') bad++;
+          }
+        }
+      }
+      return { good, bad };
+    }
+
+    // 完成布陣前檢查
+    function finishSetup() {
+      const counts = getMyGhostCounts();
+      if (counts.good !== 4 || counts.bad !== 4) {
+        showAlert(
+          '❌ 布陣數量不符',
+          `你的幽靈配置為：【好鬼 ${counts.good} 隻，壞鬼 ${counts.bad} 隻】。<br><br>規則要求必須恰好為 <b>4 隻好鬼 (藍)</b> 與 <b>4 隻壞鬼 (紅)</b>，請點擊棋子調整後再確認！`
+        );
+        return;
+      }
+
+      if (myPlayer === 1) p1Ready = true;
+      if (myPlayer === 2) p2Ready = true;
+
+      document.getElementById('ready-btn').disabled = true;
+      document.getElementById('ready-btn').innerText = '等待對手完成布陣...';
+
+      conn.send({ type: 'READY', player: myPlayer });
+      checkBothReady();
+    }
+
+    function checkBothReady() {
+      if (p1Ready && p2Ready) {
+        gameState = 'PLAYING';
+        document.getElementById('bottom-controls').style.display = 'none';
+        document.getElementById('setup-counter-bar').style.display = 'none';
+        render();
+      } else {
+        render();
+      }
+    }
+
+    // 處理連線端傳來的封包
+    function handleIncomingData(data) {
+      if (data.type === 'EXCHANGE_NAME') {
+        playerNames[data.player] = data.name;
+        render();
+      } else if (data.type === 'SYNC') {
+        board = data.board;
+        turn = data.turn;
+        captured = data.captured;
+        gameState = data.gameState;
+        if (data.playerNames) {
+          // 修復問題 1：合併暱稱，不覆蓋己方已輸入的暱稱
+          if (data.playerNames[1] && myPlayer !== 1) playerNames[1] = data.playerNames[1];
+          if (data.playerNames[2] && myPlayer !== 2) playerNames[2] = data.playerNames[2];
+        }
+        render();
+      } else if (data.type === 'READY') {
+        if (data.player === 1) p1Ready = true;
+        if (data.player === 2) p2Ready = true;
+        checkBothReady();
+      } else if (data.type === 'MOVE') {
+        board = data.board;
+        captured = data.captured;
+        turn = data.turn;
+        render();
+
+        // 問題 2：如果對手吃了我的棋子，也通知我被吃的是什麼鬼
+        if (data.capturedInfo) {
+          const isGood = data.capturedInfo.type === 'good';
+          showCaptureResultModal(
+            `對手【${playerNames[data.capturedInfo.byPlayer]}】吃了你的一隻幽靈！`,
+            isGood ? '🟦' : '🟥',
+            isGood ? `對手吃掉了你的 <b style="color: var(--accent-blue);">好鬼 (藍)</b>！` : `對手誤吃了你的 <b style="color: var(--accent-red);">壞鬼 (紅)</b>！`
+          );
+        }
+      } else if (data.type === 'GAMEOVER') {
+        showGameOver(data.winner, data.reason);
+      }
+    }
+
+    function sendSync() {
+      conn.send({
+        type: 'SYNC',
+        board,
+        turn,
+        captured,
+        gameState,
+        playerNames
+      });
+    }
+
+    // 座標轉換 (己方視角永遠在下方)
+    function getRenderCoords(r, c) {
+      if (myPlayer === 2) {
+        return { globalR: 5 - r, globalC: 5 - c };
+      }
+      return { globalR: r, globalC: c };
+    }
+
+    // 判斷某個全域位置是否為當前玩家的逃生出口格 (敵方的底線兩角)
+    function isAtOpponentExit(r, c, player) {
+      if (player === 1) return (r === 0 && (c === 0 || c === 5));
+      if (player === 2) return (r === 5 && (c === 0 || c === 5));
+      return false;
+    }
+
+    // 渲染畫面
+    function render() {
+      updateStatusText();
+      const boardEl = document.getElementById('board');
+      boardEl.innerHTML = '';
+
+      let canEscapeNow = false;
+
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const { globalR, globalC } = getRenderCoords(r, c);
+          const ghost = board[globalR][globalC];
+
+          const cellEl = document.createElement('div');
+          cellEl.className = 'cell';
+
+          // 頂部左右兩角為逃生出口門
+          if (r === 0 && (c === 0 || c === 5)) {
+            cellEl.classList.add('exit-zone');
+          }
+
+          // 選取高亮與合法步
+          if (selectedPos && selectedPos.r === globalR && selectedPos.c === globalC) {
+            cellEl.classList.add('selected');
+
+            // 問題 3：如果選中的是位於對手出口格的好鬼，高亮提示可逃脫
+            if (ghost && ghost.player === myPlayer && ghost.type === 'good' && isAtOpponentExit(globalR, globalC, myPlayer)) {
+              cellEl.classList.add('can-escape');
+              canEscapeNow = true;
+            }
+          }
+          if (validMoves.some(m => m.r === globalR && m.c === globalC)) {
+            cellEl.classList.add('valid-move');
+          }
+
+          // 幽靈棋子
+          if (ghost) {
+            const ghostEl = document.createElement('div');
+            ghostEl.className = 'ghost';
+            ghostEl.innerHTML = '👻';
+
+            const badge = document.createElement('div');
+            badge.className = 'badge';
+
+            // 只有自己棋子能看到善惡顏色
+            if (ghost.player === myPlayer) {
+              badge.classList.add(ghost.type);
+            } else {
+              badge.classList.add('unknown');
+            }
+
+            ghostEl.appendChild(badge);
+            cellEl.appendChild(ghostEl);
+          }
+
+          cellEl.onclick = () => handleCellClick(globalR, globalC);
+          boardEl.appendChild(cellEl);
+        }
+      }
+
+      // 控制逃脫按鈕顯示
+      const escapeCtrl = document.getElementById('escape-controls');
+      if (canEscapeNow && gameState === 'PLAYING' && turn === myPlayer) {
+        escapeCtrl.style.display = 'flex';
+      } else {
+        escapeCtrl.style.display = 'none';
+      }
+    }
+
+    function updateStatusText() {
+      const msg = document.getElementById('game-message');
+      const myNameDisp = document.getElementById('my-name-display');
+      const oppNameDisp = document.getElementById('opp-name-display');
+      const myGood = document.getElementById('my-good');
+      const myBad = document.getElementById('my-bad');
+      const oppGood = document.getElementById('opp-good');
+      const oppBad = document.getElementById('opp-bad');
+
+      const opponent = myPlayer === 1 ? 2 : 1;
+      myNameDisp.innerText = playerNames[myPlayer];
+      oppNameDisp.innerText = playerNames[opponent];
+
+      myGood.innerText = captured[myPlayer].good;
+      myBad.innerText = captured[myPlayer].bad;
+      oppGood.innerText = captured[opponent].good;
+      oppBad.innerText = captured[opponent].bad;
+
+      // 更新布陣數量提示
+      if (gameState === 'SETUP') {
+        const counts = getMyGhostCounts();
+        const gEl = document.getElementById('setup-good-count');
+        const bEl = document.getElementById('setup-bad-count');
+        gEl.innerText = `${counts.good} / 4`;
+        bEl.innerText = `${counts.bad} / 4`;
+        gEl.className = `count-tag ${counts.good === 4 ? 'valid' : 'invalid'}`;
+        bEl.className = `count-tag ${counts.bad === 4 ? 'valid' : 'invalid'}`;
+
+        msg.innerHTML = `【布陣階段】點選己方幽靈可切換好/壞，必須剛好 4 藍 4 紅。`;
+      } else if (gameState === 'PLAYING') {
+        if (turn === myPlayer) {
+          msg.innerHTML = `👉 輪到 <span class="player-highlight">【${playerNames[myPlayer]}】(你)</span> 行動（點選幽靈移動 1 格）`;
+        } else {
+          msg.innerHTML = `⏳ 輪到 <span class="player-highlight">【${playerNames[turn]}】</span> 行動中，請稍候...`;
+        }
+      }
+    }
+
+    // 點擊棋格事件
+    function handleCellClick(r, c) {
+      if (gameState === 'SETUP') {
+        // 布陣階段：點選切換好/壞
+        const ghost = board[r][c];
+        if (ghost && ghost.player === myPlayer) {
+          ghost.type = ghost.type === 'good' ? 'bad' : 'good';
+          render();
+          sendSync();
+        }
+        return;
+      }
+
+      if (gameState !== 'PLAYING' || turn !== myPlayer) return;
+
+      const clickedGhost = board[r][c];
+
+      // 選取己方棋子
+      if (clickedGhost && clickedGhost.player === myPlayer) {
+        selectedPos = { r, c };
+        calculateValidMoves(r, c);
+        render();
+        return;
+      }
+
+      // 點擊可行目標
+      const move = validMoves.find(m => m.r === r && m.c === c);
+      if (selectedPos && move) {
+        const targetGhost = board[r][c];
+
+        // 若目的地方格有對手棋子，跳出吃子二度確認
+        if (targetGhost && targetGhost.player !== myPlayer) {
+          pendingMove = { from: selectedPos, to: move };
+          document.getElementById('capture-confirm-modal').classList.remove('hidden');
+          return;
+        }
+
+        // 一般移動
+        executeMove(selectedPos, move);
+      } else {
+        selectedPos = null;
+        validMoves = [];
+        render();
+      }
+    }
+
+    // 確認吃棋
+    function confirmCapture() {
+      document.getElementById('capture-confirm-modal').classList.add('hidden');
+      if (pendingMove) {
+        executeMove(pendingMove.from, pendingMove.to);
+        pendingMove = null;
+      }
+    }
+
+    // 取消吃棋
+    function cancelCapture() {
+      document.getElementById('capture-confirm-modal').classList.add('hidden');
+      pendingMove = null;
+      selectedPos = null;
+      validMoves = [];
+      render();
+    }
+
+    // 計算合法正交移動
+    function calculateValidMoves(r, c) {
+      validMoves = [];
+      const deltas = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+      for (let [dr, dc] of deltas) {
+        const nr = r + dr;
+        const nc = c + dc;
+
+        if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+          const target = board[nr][nc];
+          if (!target || target.player !== myPlayer) {
+            validMoves.push({ r: nr, c: nc });
+          }
+        }
+      }
+    }
+
+    // 問題 3：執行好鬼逃脫
+    function executeEscape() {
+      if (!selectedPos || gameState !== 'PLAYING' || turn !== myPlayer) return;
+      const ghost = board[selectedPos.r][selectedPos.c];
+      if (ghost && ghost.player === myPlayer && ghost.type === 'good' && isAtOpponentExit(selectedPos.r, selectedPos.c, myPlayer)) {
+        board[selectedPos.r][selectedPos.c] = null;
+        const reason = `🎉 恭喜【${playerNames[myPlayer]}】的好鬼成功逃出城堡，獲得輝煌勝利！`;
+        conn.send({ type: 'GAMEOVER', winner: myPlayer, reason });
+        showGameOver(myPlayer, reason);
+      }
+    }
+
+    // 執行走棋與勝負判斷
+    function executeMove(from, to) {
+      const movingGhost = board[from.r][from.c];
+      const target = board[to.r][to.c];
+      let capturedInfo = null;
+
+      if (target) {
+        captured[myPlayer][target.type]++;
+        capturedInfo = {
+          type: target.type,
+          byPlayer: myPlayer
+        };
+
+        // 問題 2：主動吃棋的玩家彈出結果視窗
+        const isGood = target.type === 'good';
+        showCaptureResultModal(
+          '👻 吃棋揭曉！',
+          isGood ? '🟦' : '🟥',
+          isGood ? `太棒了！你吃到了對手的 <b style="color: var(--accent-blue);">好鬼 (藍)</b>！` : `糟糕！你吃到了對手的 <b style="color: var(--accent-red);">壞鬼 (紅)</b>！`
+        );
+
+        // 勝利條件 1：吃光對手 4 隻好鬼
+        if (captured[myPlayer].good === 4) {
+          board[to.r][to.c] = movingGhost;
+          board[from.r][from.c] = null;
+          const reason = `🎉【${playerNames[myPlayer]}】成功吃光了對手的 4 隻好鬼，智勇雙全贏得勝利！`;
+          conn.send({ type: 'GAMEOVER', winner: myPlayer, reason });
+          showGameOver(myPlayer, reason);
+          return;
+        }
+
+        // 勝利條件 2：誤吃 4 隻壞鬼 (對手勝)
+        if (captured[myPlayer].bad === 4) {
+          board[to.r][to.c] = movingGhost;
+          board[from.r][from.c] = null;
+          const opponent = myPlayer === 1 ? 2 : 1;
+          const reason = `💀【${playerNames[myPlayer]}】誤吃了 4 隻壞鬼！由【${playerNames[opponent]}】誘敵成功奪得勝利！`;
+          conn.send({ type: 'GAMEOVER', winner: opponent, reason });
+          showGameOver(opponent, reason);
+          return;
+        }
+      }
+
+      board[to.r][to.c] = movingGhost;
+      board[from.r][from.c] = null;
+
+      selectedPos = null;
+      validMoves = [];
+      turn = turn === 1 ? 2 : 1;
+
+      render();
+      conn.send({
+        type: 'MOVE',
+        board,
+        captured,
+        turn,
+        capturedInfo
+      });
+    }
+
+    // 問題 2：顯示吃子結果揭曉彈窗
+    function showCaptureResultModal(title, badge, desc) {
+      document.getElementById('result-title').innerText = title;
+      document.getElementById('result-badge').innerText = badge;
+      document.getElementById('result-desc').innerHTML = desc;
+      document.getElementById('capture-result-modal').classList.remove('hidden');
+    }
+
+    function closeCaptureResultModal() {
+      document.getElementById('capture-result-modal').classList.add('hidden');
+    }
+
+    // 一般彈窗
+    function showAlert(title, desc) {
+      document.getElementById('alert-title').innerHTML = title;
+      document.getElementById('alert-desc').innerHTML = desc;
+      document.getElementById('alert-modal').classList.remove('hidden');
+    }
+
+    function closeAlertModal() {
+      document.getElementById('alert-modal').classList.add('hidden');
+    }
+
+    // 遊戲結束結算
+    function showGameOver(winner, reason) {
+      gameState = 'ENDED';
+      const isWinner = (winner === myPlayer);
+      document.getElementById('modal-title').innerText = isWinner ? `🏆 恭喜【${playerNames[myPlayer]}】獲勝！` : `💥【${playerNames[winner]}】獲得了勝利！`;
+      document.getElementById('modal-desc').innerHTML = reason;
+      document.getElementById('gameover-modal').classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>
